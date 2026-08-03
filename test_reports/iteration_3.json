@@ -1,0 +1,45 @@
+{
+  "summary": "P3 iteration: verified the 'destroy is not a function' bug is fixed, RBAC screens filtering, new positions/signatories catalogs, notifications module with act/read flows, disk-backed attachments upload, exports (CSV/XLSX/DOCX/PDF) for all 11 sources, consolidated inventory with supplies CRUD/alert-config/scan, and CoA PDF format toggle (modern|standard). Backend: 34/34 pytest passed on new backend_test_p3.py. Frontend: verified login has NO prefilled credentials, sidebar for admin includes nav-notifications and nav-inventory + header notif badge, all 6 sampled pages (notifications, inventory, reports, users, suppliers, lab-forms/aging) load with zero 'destroy'-related runtime errors. Screens-based RBAC verified end-to-end: created an analyst limited to [dashboard, samples, notifications] via /api/auth/register, logged in through UI, sidebar correctly hides nav-users/warehouses/production/finance/inventory/suppliers and shows only nav-dashboard/samples/notifications. Lab-form auto-signature + approval workflow verified: QM-created triangular_test record auto-fills 'supervisor' slot with quality_manager, request_approval creates approval_request notifications for QM/management, /notifications/{id}/act with approve=true transitions record to approved and sets approved_by_role.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "PATCH /api/inventory/alert-config", "issue": "Response body is the raw dict (with updated_at/updated_by) but does not include a normalized 'ok' flag — trivial DX nit, backwards compatible."},
+      {"endpoint": "POST /api/inventory/alerts/scan", "issue": "Response counts dispatched notifications but does not report deduped items — hard to observe when nothing happens because dedup window is active. Consider returning {dispatched, deduped, skipped_disabled}."},
+      {"endpoint": "GET /api/attachments/list", "issue": "Accepts ANY authenticated user without checking whether the caller has read permission on the parent entity_type (e.g. lab_form). Currently effectively read-anyone. Not a leak of file bytes because only metadata is returned, but consider tightening."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Console 404s", "issues": ["Every page emits 2 console 404s (likely favicon or missing static). Not blocking but noisy in production monitoring."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test_p3.py",
+    "/app/backend/tests/backend_test_p2.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_p3_results.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: /api/attachments/list should require the same read permission as the parent entity_type (or at least a role whitelist) rather than just get_current_user.",
+    "OPTIONAL: /api/inventory/alerts/scan return payload should include deduped counters so UI can distinguish 'nothing to alert' from 'dedup window active'."
+  ],
+  "critical_code_review_comments": [
+    "screens.py mapping and DEFAULT_SCREENS_BY_ROLE are duplicated across backend and (implicitly) frontend sidebar filter — if a new screen key is added on frontend but not in SCREEN_KEYS the PATCH /users/{id} will reject it. Consider generating the frontend catalog from GET /api/auth/screens at bootstrap.",
+    "routers/lab_forms.py APPROVAL_REQUIRED_ROLES is hard-coded to ['quality_manager','management']; the same list appears semantically in notifications.act_on_notification's role whitelist (which also adds 'admin','supervisor'). Consider unifying the two so the notification can only be acted on by users of a role that CAN also be broadcast to (or explicitly document the difference).",
+    "routers/inventory_ext.py both create_supply/update_supply/delete_supply use require_permission('reagents','write') — but delete has an extra role check that duplicates the permission matrix. Same 'permission-matrix vs. inline role list' inconsistency called out in previous P2 review still applies for the new modules (attachments delete, alert-config PUT, supplies delete).",
+    "routers/attachments.py stored_path is returned once on POST /upload response then removed with doc.pop('stored_path', None). The extraction is fine but readers may miss that; consider projecting it out at the query layer for a single code path.",
+    "routers/exports.py _query_source date range uses lexical string comparison against ISO timestamps — safe for date_from without time but date_to appends 'T23:59:59' which assumes UTC-stored ISO strings; verify collections consistently use isoformat with the same tz."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test_p3.py (new — 34 tests, all passing)"
+  ],
+  "success_rate": {"backend": "100% (34/34 P3) — full regression P1+P2 not re-run this pass", "frontend": "100% on the sampled flows"},
+  "test_credentials": "admin@yazoo.com / Admin123! (seeded). Tests create/delete transient users: ui-analyst-<rand>@yazoo.com, p3-analyst-<rand>@yazoo.com, p3-qm-<rand>@yazoo.com (all removed by module teardown).",
+  "seed_data_creation": "None persistent. All P3 test-created supplies, lab-form records, attachments, and test users are removed by module-scope teardown.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend regression: `cd /app/backend && python -m pytest tests/backend_test.py tests/backend_test_p2.py tests/backend_test_p3.py -n 0 -v` (must use -n 0 because inter-test class attrs stored on pytest module — pytest.ini uses -n 2 loadscope by default). New P3 fixtures create a QM and Analyst per run — the QM is used to create a lab_form with request_approval=true because analyst has no samples:write permission. If you need to test the analyst signature slot path, use a role that has BOTH samples:write AND matches one of the role_hint arrays (supervisor matches many slots; QM matches 'supervisor'/'quality' on several forms). CoA format toggle test uses whatever CoA already exists in the DB (from P1's TestSampleFlow) — if the DB is wiped, run backend_test.py first or the test will skip. Attachments live on disk under /app/backend/uploads/{entity_type}/YYYY/MM/ (never Mongo) — teardown may leave old files if a test aborts. The RBAC-by-screens filter is fully server-driven: the frontend just filters the sidebar based on user.screens returned by /api/auth/me; admin sees everything because their screens field defaults to SCREEN_KEYS on seed.",
+  "rca of the issue": "Previous 'destroy is not a function' bug — fully resolved. Root cause was Suppliers.js using `useEffect(load, [])` where `load = () => api.get(...)` returned a Promise, and React 19 StrictMode tried to call the returned Promise as the cleanup function. Verified by navigating to /suppliers as admin + as freshly-created analyst; no PAGE_ERROR captured on any of the 6 navigations. However, iteration_2 also flagged this pattern in ~15 other pages — those calls still work because their `load` bodies are wrapped in braces returning undefined, but the pattern remains fragile. Recommend main agent audit all `useEffect(fn, [])` usages once more."
+}

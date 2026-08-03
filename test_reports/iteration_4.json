@@ -1,0 +1,50 @@
+{
+  "summary": "Iteration 4 (MongoDB→SQLAlchemy async migration + signatures + global search + low-stock alerts + always-notify + framer-motion). Wrote /app/backend/tests/backend_test_p4.py (34 tests). Found and FIXED 1 critical bug in the Mongo-compat facade (db.py) — `_find_row` returned unsorted rows/docs after python post-filter, so `find_one_and_update(_id=...)` and `replace_one(_id=...)` on `counters` and `notification_dedup` picked the wrong `_pk` and hit UNIQUE constraint violations on _id_str the moment more than one counter/dedup existed. This broke `_next_seq` (lab-forms create, PO codes) and inventory alert dedup upserts. Also fixed `replace_one` upsert path so it preserves the custom `_id` field into the stored doc. After fix: 34/34 P4 pass + full P1 pass. Full P2 has 2 failures caused by a SEPARATE missing method on the compat facade (`Collection.aggregate` — referenced by /api/stock/summary in erp_warehouses.py:244), which is a real regression that main agent needs to implement. P3 has 4 legacy assertions now failing because iteration 4 added an unconditional 'info' broadcast on every lab-form create (arrives BEFORE the approval_request in the QM inbox and the P3 test picks the first notif). Frontend spot-checked: login OK, dashboard framer-motion banner + KPI cards animate in, low-stock modal appears on load with Yazoo red design (5 critical items), Profile page has 'Firma Electrónica' with 2 tabs (Subir imagen / Dibujar en pantalla), Notifications page loads, global search bar works — typing M01 shows shortcut dropdown and Enter navigates to /samples. Search shortcut backend flow M01/L01/F01 verified end-to-end.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "GET /api/stock/summary", "issue": "Returns 500. `db.stock_movements.aggregate(...)` fails: 'Collection' object has no attribute 'aggregate'. The Mongo-compat facade in db.py does not implement aggregate() but erp_warehouses.stock_summary still uses it. Needs either implementation of an aggregate stub over the pipeline used ($match/$group by warehouse_id+item_id+item_type+lot, $sum quantity by type) or rewrite of stock_summary to use SQLAlchemy group_by. Blocks Almacenes & Stock summary widget in UI.", "priority": "CRITICAL"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/lab-forms/records/{form_type}", "issue": "The always-fires 'info' broadcast to admin/quality_manager/management now co-exists with the 'approval_request' broadcast when request_approval=true — a QM ends up with 2 notifications for the same record. Iteration 3 tests that filter QM's inbox with `notifications[0]` incorrectly pick the info one. Consider deduping recipients: if role is already going to receive an approval_request, skip the info duplicate."},
+      {"endpoint": "GET /api/support/local-admin/bundle", "issue": "Frontend polls this on every page but backend returns 404. Either implement or remove the client call to reduce console noise."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Header", "issues": ["Profile pen button lacks data-testid (had to fall back to href=/profile). Add data-testid='header-profile-pen' for automated testability."]},
+      {"screen": "Global Search", "issues": ["SearchBar input has no data-testid (had to use placeholder match). Add data-testid='global-search-input'."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test_p4.py",
+    "/app/test_reports/pytest/pytest_p4_results.xml"
+  ],
+  "action_items": [
+    "CRITICAL: Implement `Collection.aggregate()` in /app/backend/db.py (Mongo-compat facade) OR rewrite /app/backend/routers/erp_warehouses.py stock_summary() using native SQLAlchemy group_by against ylms_stock_movements. Currently /api/stock/summary returns 500 in preview.",
+    "Deduplicate lab-form notifications: when request_approval=true, do not also broadcast the 'info' kind to the same recipients (admin/quality_manager/management) — this causes P3 approval-flow tests to pick the wrong notification and also spams the QM inbox with 2 notifications per submission.",
+    "Add data-testid='global-search-input' to SearchBar and data-testid='header-profile-pen' to the profile-icon button in Layout.js for reliable UI test selectors.",
+    "Address noisy 404 on /api/support/local-admin/bundle (either add stub endpoint or remove the polling client call).",
+    "Optional: audit remaining callers of db.<collection>.aggregate in the codebase (grep suggests only erp_warehouses.py), and callers using $addToSet / $pull with complex operators — since the same rows/docs-alignment bug could theoretically re-appear on other post-filtered queries."
+  ],
+  "critical_code_review_comments": [
+    "db.py `_find_row` was returning `rows` (unfiltered from SQL) alongside `docs` (post-filtered by Python) — the two lists desync as soon as any post-filter narrows results, causing wrong-row updates. Fix now zips them. Recommend adding a unit test in tests/ that inserts 2 counters with different _id and increments each one to guard this regression.",
+    "db.py `replace_one` upsert path was calling `merged.pop('_id', None)` before insert, dropping the primary key from stored JSON and causing `_id_str` to be persisted as string 'None' for notification_dedup. Fixed to inject the query's id-field into `merged` before extraction. Same latent risk exists for `settings` collection (`id_field='_id'`) — any caller doing replace_one on settings without embedding _id in the doc would collide.",
+    "erp_warehouses.py uses Mongo aggregation pipeline; migration surface for MSSQL/SQLite via facade is incomplete. Consider a native SQL implementation guarded by a `if isinstance(db, MongoDB)` branch or dropping the pipeline entirely.",
+    "routers/lab_forms.py now double-broadcasts (info + approval_request) to the same role set — creates confusing UX and breaks existing tests. Either dedupe recipients or drop the 'info' broadcast when request_approval is true.",
+    "SearchBar / Profile pen / StockAlertProvider components missing data-testid attributes — inconsistent with the rest of the app.",
+    "screens.py route_map is duplicated inside routers/search.py:global_search() rather than being sourced from SCREENS — divergence risk when a new screen is added."
+  ],
+  "updated_files": [
+    "/app/backend/db.py (fixed _find_row rows/docs alignment + replace_one custom _id preservation)",
+    "/app/backend/tests/backend_test_p4.py (new — 34 tests, 34/34 passing)"
+  ],
+  "success_rate": {"backend": "P4 34/34 (100%); P1 full pass; P2 41/43 (95% — 2 fail due to /api/stock/summary aggregate bug); P3 legacy 30/34 (fails are stale approval-order assertions, not real regressions)", "frontend": "100% on spot-checked flows (login, dashboard animations, stock modal, profile signature tabs, notifications, global search M01→/samples)"},
+  "test_credentials": "admin@yazoo.com / Admin123! (seeded). Fixture creates a transient QM: p4-qm-<run>@yazoo.com — not cleaned up (not critical, prefixed p4-).",
+  "seed_data_creation": "P4 test run creates: 1 QM user, 1 product (P4-PRD-*), 1 test, 1 reagent, 1 supplier, 1 warehouse, 1 purchase-order, N low-stock supplies (P4-SUP-*), 2 lab-form records (triangular_test), 1 signature file. Nothing is auto-deleted; artifacts are `P4-*` prefixed for easy cleanup.",
+  "retest_needed": true,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "Backend regression: `cd /app/backend && python -m pytest tests/backend_test.py tests/backend_test_p2.py tests/backend_test_p3.py tests/backend_test_p4.py -n 0 -v` (use -n 0, module-scoped state on pytest attrs). P2 stock summary + P3 approval-flow tests will keep failing until main agent (a) implements aggregate() or rewrites stock_summary, and (b) either dedupes notifications or updates P3 test to filter by kind='approval_request' explicitly. The `_find_row` fix in db.py is the load-bearing change — any additional post-filtered mongo-compat operations should be retested. Signature files persist at /app/backend/signatures/{user_id}.png. Fresh admin login now correctly returns has_signature bool.",
+  "rca of the issue": "ROOT CAUSE (fixed): In /app/backend/db.py, `Collection._find_row(query)` fetched all rows from SQL (using only the SQL-translatable subset of the mongo query), converted them to docs, then applied remaining predicates in Python — but only trimmed the `docs` list, not `rows`. Any subsequent `find_one_and_update` / `update_one` / `replace_one` then used `rows[0]['_pk']` as the update target while `docs[0]` was the semantically-matched document, causing the WRONG existing row to be UPDATE-ed with the target document's extract columns. For collections using `id_field='_id'` (counters, notification_dedup, settings), the update tried to set `_id_str` to a value that already existed on the row we should have updated in the first place, producing sqlite3.IntegrityError: UNIQUE constraint failed: ylms_<name>._id_str. Reproduction: 1) create counter A via find_one_and_update(_id='A', $inc:{seq:1}, upsert=True) → row inserted at _pk=1. 2) create counter B via find_one_and_update(_id='B', $inc:{seq:1}, upsert=True) → row inserted at _pk=2. 3) Increment A again → _find_row picks rows=[_pk=1,_pk=2] with docs=[A], but zip is broken; UPDATE targets _pk=1 (correct here) — actually first repro was A then A: first call inserted _pk=1 for A. Second call for A: SQL returned all rows (only [A] existed at that point) but with 2 counters (po + labform_triangular_test), the update mistakenly hit _pk=1 (`po`) trying to write _id_str='labform_triangular_test'. Mitigation: pair rows with docs post-filter (implemented). Additional issue in `replace_one` upsert: `merged.pop('_id', None)` stripped the primary key from the stored doc, so the extract layer wrote _id_str='None' every time; second call then collided. Mitigation: preserve id_field from query into merged doc (implemented). Both fixes verified end-to-end via P4 tests."
+}

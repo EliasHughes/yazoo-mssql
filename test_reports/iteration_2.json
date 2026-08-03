@@ -1,0 +1,51 @@
+{
+  "summary": "Phase P2 e2e testing. Backend: 42/43 pytest passed for the 5 new routers (instruments+agents, documents/versions/approve, suppliers, purchase-orders full lifecycle, warehouses, stock movements + aggregated summary, production orders w/ BOM start->consume, complete->finished IN + cost_summary, QC-gate blocking completion when linked sample is not approved, finance dashboard KPIs, costs-by-product) plus RBAC on the new modules. One RBAC failure: warehouse role cannot create Purchase Orders because the router uses require_permission('batches','read') but the warehouse role has no 'batches' permission — contradicts the P2 spec. Frontend: verified login, sidebar has all 4 groups (General, LIMS, ERP, Sistema) with the 11 nav items and correct data-testids; verified UI flows on Instruments (create agent + create instrument), Documents (create doc + upload v1 with content_text + approve v1 -> badge 'Aprobada'), Warehouses (create warehouse + tabs), Finance (6 KPI cards), PurchaseOrders and ProductionOrders (modals open with all fields). Fixed a blocking UI bug: /instruments used navigator.clipboard.writeText which threw NotAllowedError in the preview iframe/sandbox and crashed React with an uncaught runtime overlay after creating an agent — wrapped all clipboard writes in try/catch.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "/api/purchase-orders (POST)", "issue": "P2 spec says 'warehouse' role must be allowed to create Purchase Orders, but the router uses _erp_perm() = require_permission('batches','read'). The 'warehouse' role has no 'batches' permission → returns 403. Same defect applies to /api/suppliers routes (also require batches:read).", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "/api/production-orders/{id}/complete", "issue": "unit_cost is rounded to 4 decimals inside cost_summary but the finished-product IN stock_movement uses the same formula independently — if a rounding rule ever changes only one side, they can drift. Consider computing once and reusing."},
+      {"endpoint": "/api/stock/movements (POST)", "issue": "'adjustment' with negative quantity is documented but the summary aggregation treats 'adjustment' as always positive ($cond => quantity), so a negative adjustment will inflate the aggregated stock. Backend consumer must always send positive quantity for adjustments."},
+      {"endpoint": "/api/documents/{id}/versions (POST)", "issue": "10MB check is done on base64 length (14_000_000 chars) which is a rough approximation. OK for now, but consider decoding and measuring true byte length."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Instruments.js (Agent create + rotate + copy)", "issue": "FIXED by tester: navigator.clipboard.writeText was called unconditionally and threw NotAllowedError in sandboxed browsers, crashing React with a persistent 'Uncaught runtime errors' overlay that blocked all subsequent clicks. Wrapped in a safeCopy() helper that swallows the error. Same pattern exists in other modules where clipboard is used — main agent should audit.", "selector": "n/a", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Multiple pages", "issues": ["useEffect(load, []) pattern used in 15 pages returns a Promise from `load` — React logs 'useEffect must not return anything besides a function' and could misbehave in Strict Mode. Wrap as useEffect(() => { load(); }, []).", "Documents version upload modal: when no file is chosen and only 'Notas de cambios' textarea is filled (the first textarea), the backend rejects with 'Debe adjuntar contenido' but the toast only appears briefly and the modal stays open — consider marking the 'contenido de texto' textarea as required OR moving it above the notes field so testers/users don't confuse the two.", "Warehouses tabs order in UI is ['tab-stock','tab-warehouses','tab-movements'] — 'stock' (Saldos) is the default active tab; the P2 spec expected Almacenes as the landing tab. Minor UX preference."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test_p2.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_p2_results.xml"
+  ],
+  "action_items": [
+    "Fix RBAC: allow 'warehouse' role to create Suppliers and Purchase Orders. Simplest fix: change _erp_perm() in erp_purchases.py to a role check (admin/quality_manager/supervisor/warehouse/management) OR grant 'batches':'read' to warehouse in auth_utils.PERMISSIONS. Then re-run TestRbacP2::test_warehouse_can_create_purchase_order.",
+    "Audit remaining navigator.clipboard.writeText calls project-wide and wrap in try/catch to avoid Chrome 'NotAllowedError' crashing React in sandbox/HTTP contexts.",
+    "Replace 15 `useEffect(load, [])` occurrences with `useEffect(() => { load(); }, [])` to remove the React warning about promise-returning effects."
+  ],
+  "critical_code_review_comments": [
+    "erp_purchases.py + erp_warehouses.py + erp_production.py all use require_permission on modules that don't exactly reflect the ERP domain (batches / reagents). Consider adding proper 'purchases','warehouses','production' permission keys to PERMISSIONS matrix and referencing them explicitly.",
+    "Instruments.js Windows agent script is bundled as a huge raw string inside instruments.py. It is fine as an MVP but should be moved to a separate template file / Jinja render as it grows.",
+    "erp_production.complete_order computes unit_cost = material_cost/actual_quantity but does NOT add labor/overhead. Fine for MVP, but Finance dashboard 'avg_unit_cost' will therefore always equal material-only cost — call this out to end users.",
+    "documents.upload_version accepts arbitrary base64 up to 14 MB without a virus scan or file magic sniffing. If uploaded content is later served with 'inline' Content-Disposition (already the case in download_version) a malicious HTML/SVG could execute. Consider sniffing magic bytes and forcing Content-Disposition: attachment for anything not application/pdf.",
+    "stock/summary aggregation treats 'adjustment' as always positive; consumers of the /stock/movements POST endpoint could POST a negative quantity for 'adjustment' (documented behavior) but the summary would then over-count. Either force adjustments to be signed AND include them as-is in the pipeline, or reject negative adjustments outright.",
+    "auth_utils.PERMISSIONS still has no explicit keys for the new modules (instruments, documents, suppliers, purchases, warehouses, stock, production, finance). All new endpoints piggyback on existing keys — as the app grows this coupling will break intended RBAC."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test_p2.py (new — 43 tests, 42 passing)",
+    "/app/frontend/src/pages/Instruments.js (fixed clipboard.writeText crash)"
+  ],
+  "success_rate": {"backend": "97.7% (42/43 pytest)", "frontend": "~90% — 6/7 flows verified in browser, Suppliers UI flow validated at API level only due to timing on last run"},
+  "test_credentials": "admin@yazoo.com / Admin123! (seeded on startup, verified)",
+  "seed_data_creation": "None persistent — pytest suite uses TEST_/RUN-suffixed codes and best-effort teardown deletes them. UI test-created rows (AGENT-UI-*, INST-UI-*, SOP-UI-*, SOP2-UI-*, WH-UI-*, SUP-UI-*) remain in the DB as harmless test data.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run backend regression with: `cd /app/backend && python -m pytest tests/backend_test.py tests/backend_test_p2.py -n 0 -v` (must use -n 0 due to inter-class pytest attrs). The failing test TestRbacP2::test_warehouse_can_create_purchase_order intentionally asserts spec behavior; it will pass only after the RBAC fix. For UI, the clipboard fix uses a safeCopy() wrapper — verify it still copies for real users (there's no unit test since navigator.clipboard needs a live browser). Documents upload version: use `page.fill('[data-testid=\"version-upload-modal\"] textarea[placeholder^=\"Si no adjuntas\"]', ...)` NOT the first textarea (which is 'Notas de cambios').",
+  "rca of the issue": "1) Frontend clipboard crash — root cause: unhandled Promise rejection from navigator.clipboard.writeText inside AgentForm onSaved and rotate/copyToken handlers. In sandboxed preview iframes (and Chrome's default Permissions-Policy when clipboard-write is not granted) the call raises NotAllowedError synchronously. This bubbled to React's error boundary and rendered the react-error-overlay that intercepts pointer events on the whole viewport, making every subsequent nav click fail. Fix applied: wrap in try/catch + Promise .catch() so the error is swallowed. Mitigation: page-level ErrorBoundary would also contain such regressions. 2) RBAC — root cause: erp_purchases.py uses `require_permission('batches','read')` as the common gate, but the auth_utils PERMISSIONS matrix does not grant 'batches' to the 'warehouse' role. Fix: either extend the matrix or replace the check with an explicit role whitelist that includes 'warehouse'."
+}

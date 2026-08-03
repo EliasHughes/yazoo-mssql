@@ -1,0 +1,42 @@
+{
+  "summary": "Iteration 7 · Fase B iter7 · 6-feature bundle. Backend pytest suite (19 tests) = 19/19 passing (backend_test_iter7.py). Frontend Playwright smoke on all key testids succeeded. Verified: (1) Access Tiles /api/system/modules returns 6 groups {lims,labforms,erp,hr,finance,system}; PATCH hr enabled OK; PATCH system enabled:false → 400 core-protected; unknown key → 404. (2) HR Payroll RD 2026: POST /api/hr/employees rejects cedula<11 (400); accepts 11-digit cedula; POST /api/hr/payroll/calculate?period=2026-02 returns totals{afp_employee,sfs_employee,isr,net_pay,salary_base} + lines with per-employee fields — for salary_base=45000 got afp=1291.50 sfs=1368.00 (matches spec). GET /tss-txt returns text/plain with first line 'H|202602|...'. GET voucher.pdf returns application/pdf (%PDF header). CSV export OK. DELETE employee OK. (3) Hierarchy Alerts: created subordinate user with supervisor_id=admin, subordinate POSTed a sample, GET /api/notifications for admin returned a 'hierarchy_alert' with the sample code — chain works. (4) Regression: /samples /batches /warehouses /inventory/products /users /lab-forms/records/bulk_reception /signatures/admin/users all <500. Frontend UI: /modules page renders module-tile-{lims,labforms,erp,hr,finance,system} + toggle-module-hr toggles correctly. /lab-forms/aging → 'Nuevo Registro' opens Y-FO-CO-001 form with data-testid='autosign-banner' + 'autosign-preview' visible (analyst Elias Hughes prefilled). Identification block shows N° Lote/Fecha inicio/Fecha vaciado — no 'Operador' label or input in DOM. /hr/employees new-employee-btn opens modal with emp-name/emp-cedula/emp-salary testids visible. /hr/payroll page has period-input+calc-payroll-btn. /users pen-icon (edit-<email>) opens Editar Usuario modal with user-supervisor SELECT populated (10 options including admin) — hierarchy dropdown wired. Camera evidence: opened existing AGING--2026-00001 → open-camera-btn visible → click opened camera-capture-modal with 'Tomar foto' + 'Cambiar cámara' + close (camera-close) button; getUserMedia even acquired a virtual green stream in the container; camera-close closed the modal cleanly. Notes: hierarchy test uses role='supervisor' since 'analyst' lacks POST /samples permission (403); this matches production permissions. Test subordinate cleanup via DELETE /users/{id} left 2 residual 'TEST Subordinate' users in DB from earlier runs (delete-user endpoint may not exist).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/users/{id} DELETE", "issue": "Test cleanup attempted DELETE but 2 residual 'TEST Subordinate' users remain in DB — either endpoint missing/returned non-2xx or requires different verb. Not blocking; low-priority housekeeping."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Any page on first load", "issues": ["'Alerta de Inventario' modal + 'Nuevo Registro' toast still overlap CTAs (pre-existing since iter 6). Non-blocking — testids remain clickable via force=True. Consider a session-scoped dismiss to avoid repeated interruption."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test_iter7.py",
+    "/app/test_reports/pytest/iter7.xml"
+  ],
+  "action_items": [
+    "(Optional) Provide a DELETE /api/users/{id} endpoint (or document the intended cleanup verb) so test subordinates don't accumulate.",
+    "(Optional) Dismiss the low-stock 'Alerta de Inventario' for the current session after first Entendido click — currently reappears on every route change."
+  ],
+  "critical_code_review_comments": [
+    "hr_payroll.py: `_isr_monthly` control flow is convoluted — the inner if/else re-assigns tax_annual twice per matching bracket and the for/else fallback is confusing; consider a straight linear loop with `if lo < annual <= hi: tax = base + (annual - lo)*rate; break`. Output values happen to be correct for the tested salary but future maintainers may misread.",
+    "hr_payroll.py: cedula stripping done inline; consider extracting `_normalize_cedula(str) -> str` (DRY, reused in create/update/import).",
+    "system_modules.py: `_load_state()` returns a shallow merge — enabled state persists but `default_enabled=False` for hr means the very first tenant lands with hr hidden until admin toggles it once. Consider seeding docs on startup so /modules is deterministic post-migration.",
+    "auth_router.notify_supervisor_of swallows all exceptions silently; log at WARNING level so failed notifications aren't invisible.",
+    "samples.py hooks notify_supervisor_of inside try/except that swallows errors — mirror the concern above; observable failures preferred to silent drops."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test_iter7.py (NEW)"
+  ],
+  "success_rate": {"backend": "19/19 (100%) on iter7 suite", "frontend": "100% on P0 iter7 testids (autosign-banner, autosign-preview, module tiles, toggle-module-hr, new-employee-btn+emp-*, period-input+calc-payroll-btn, user-supervisor, open-camera-btn/camera-capture-modal/camera-close)"},
+  "test_credentials": "admin@yazoo.com / Admin123!",
+  "seed_data_creation": "Created & deleted 1 test employee (TEST_EMP_*, 11-digit cedula) and 1 test subordinate user (test_sub_*@yazoo.com, role=supervisor, supervisor_id=admin) plus 1 test sample (batch HRT-*). Employee deleted OK; test subordinate residual x1-2 in DB (see minor issue).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Regression command: `REACT_APP_BACKEND_URL=$(grep REACT_APP_BACKEND_URL /app/frontend/.env | cut -d= -f2) python -m pytest /app/backend/tests/backend_test_iter7.py -v -o addopts=''`. Note login response uses 'access_token' not 'token'. Hierarchy alert test uses role='supervisor' (analyst role gets 403 on POST /samples). For camera modal UI test: /lab-forms/aging existing record → first action button in row opens Editar modal → open-camera-btn opens the Capturar evidencia dialog; virtual green stream renders even in headless container. Autosign banner only shows if logged-in user has has_signature=True (admin does).",
+  "rca of the issue": "N/A — all iter7 features working as designed."
+}

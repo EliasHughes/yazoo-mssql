@@ -1,0 +1,115 @@
+{
+  "theme_strategy": "Light mode primary for data clarity (Enterprise LIMS standard), but featuring a rich, dark sidebar and warm accents that reflect the Caribbean Rum distillery identity.",
+  "typography": {
+    "headings": {
+      "font": "Outfit, sans-serif",
+      "weights": "600, 700",
+      "usage": "Used for page titles (H1), widget headers, and key numeric KPIs. Provides a structured, modern enterprise feel with subtle character.",
+      "tracking": "tracking-tight"
+    },
+    "body": {
+      "font": "IBM Plex Sans, sans-serif",
+      "weights": "400, 500",
+      "usage": "Used for all data tables, inputs, and dense information. Ultimate legibility for numbers and technical specifications."
+    },
+    "mono": {
+      "font": "IBM Plex Mono, monospace",
+      "usage": "Used for sample IDs, QR codes, batch numbers, and SPC data."
+    }
+  },
+  "colors": {
+    "background": {
+      "app": "#FCFCF9",
+      "card": "#FFFFFF",
+      "sidebar": "#1A120E",
+      "header": "#FFFFFF"
+    },
+    "brand": {
+      "primary": "#DCA54C",
+      "primary_hover": "#C69038",
+      "primary_foreground": "#1A120E",
+      "secondary": "#2C1E16",
+      "accent": "#8A5A2B"
+    },
+    "status": {
+      "success": "#4A5D23",
+      "success_bg": "#E9EFDF",
+      "warning": "#E28B14",
+      "warning_bg": "#FDF4E7",
+      "error": "#8B1E1E",
+      "error_bg": "#F9EAEA",
+      "info": "#2B5C8A"
+    },
+    "text": {
+      "primary": "#1A120E",
+      "secondary": "#5C5046",
+      "muted": "#8A8076",
+      "on_dark": "#FFFFFF",
+      "on_dark_muted": "#A89F95"
+    },
+    "border": {
+      "default": "#E6E2DC",
+      "dark": "#3D2E24"
+    }
+  },
+  "visual_enhancers": {
+    "borders": "Use sharp or slightly rounded corners (max rounded-md / 6px) to maintain an industrial, precise enterprise look.",
+    "shadows": "Minimalist. Use shadow-sm for cards. Use a distinct shadow-lg with a warm tint for modals and dropdowns.",
+    "textures": "Add a very subtle noise texture overlay to the dark sidebar to mimic aged oak/barrel wood.",
+    "surfaces": "Use 'Grid Borders (The Technical Look)'. Separate main content sections and dashboard widgets with 1px solid borders (border-[#E6E2DC]) rather than floating cards, to maximize space and give an ERP density."
+  },
+  "grids_layouts": {
+    "app_structure": "Left sidebar (w-64) for primary navigation (Dashboard, Samples, Catalog, Equipment, SPC). Top header (h-14) for global search, active batch context, and user profile.",
+    "dashboard_grid": "High Density Grid (Mode B). grid-cols-1 md:grid-cols-4. Top row: 4 KPI summary cards (col-span-1). Second row: Main SPC chart (col-span-3), Recent Alerts feed (col-span-1).",
+    "spacing": "Dense but legible. Use p-4 for cards, gap-4 for grids. Add generous padding (p-8) to the main page wrapper to let the dense data breathe."
+  },
+  "component_style": {
+    "buttons": "Rectangular with subtle 4px radius. Primary buttons use the Amber/Gold brand color with dark text for high contrast.",
+    "tables": "Shadcn UI tables heavily customized for density. Use smaller text (text-sm), tight padding (py-2), sticky headers, and row hover states (hover:bg-[#FCFCF9]).",
+    "forms": "Left-aligned labels, crisp 1px borders on inputs, focus ring using the primary brand color.",
+    "badges": "Square corners, solid or soft backgrounds for Sample Status (Pending, Approved, Rejected, Blocked).",
+    "charts": "Use Recharts. Line charts for SPC (Statistical Process Control) with upper/lower control limits clearly marked in red."
+  },
+  "motion": {
+    "transitions": "Fast and crisp. 150ms ease-in-out for hover states.",
+    "interactions": "Highlight table rows on hover. Buttons lift slightly (-translate-y-[1px]).",
+    "loaders": "Use skeleton screens for data tables instead of spinning loaders to maintain layout structure during data fetching."
+  },
+  "accessibility": {
+    "contrast": "Strict adherence to APCA standards. Amber primary button MUST have dark text (#1A120E).",
+    "focus": "All interactive elements must have a visible focus ring (focus:ring-2 focus:ring-[#DCA54C] focus:ring-offset-1).",
+    "testing": "All interactive and key informational elements MUST include a `data-testid` attribute (e.g., data-testid='login-submit', data-testid='sample-status-badge')."
+  },
+  "media": {
+    "image_urls": [
+      {
+        "url": "https://images.unsplash.com/photo-1608232385022-8ba61bec6c59?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjd8MHwxfHNlYXJjaHwxfHxydW0lMjBiYXJyZWxzJTIwY2VsbGFyfGVufDB8fHx8MTc4NDc2ODQyOHww&ixlib=rb-4.1.0&q=85",
+        "category": "Authentication Background / Empty State",
+        "description": "Brown wooden barrels on floor. Use as a dark, atmospheric background for the Login page (with a heavy dark overlay) or as an empty state illustration."
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1595500381966-eee2034aae48?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzd8MHwxfHNlYXJjaHwxfHxsYWJvcmF0b3J5JTIwZmxhc2slMjBhbWJlciUyMGxpcXVpZHxlbnwwfHx8fDE3ODQ3Njg0MzR8MA&ixlib=rb-4.1.0&q=85",
+        "category": "Dashboard / Samples Module Cover",
+        "description": "Laboratory flask with amber liquid. Perfect visual accent for the 'Guided Testing' or 'Sample Reception' module headers."
+      }
+    ],
+    "icons": "Use 'lucide-react' for all UI icons. Standardize stroke-width to 1.5 for a sharp, technical look."
+  },
+  "instructions_to_main_agent": [
+    "CREATE FILES USING .js EXTENSION ONLY (no .tsx).",
+    "Do not use complete transparent backgrounds in headers or dropdowns. Ensure solid backgrounds (like bg-white) for overlays.",
+    "Implement a layout structure with a fixed left sidebar and a scrollable main content area.",
+    "Prioritize data density and table design. Make tables look like a professional ERP (Odoo, SAP), not a spaced-out consumer app.",
+    "Ensure the application is fully responsive, though optimized for desktop (as is standard for lab workstations).",
+    "Use standard Tailwind CSS classes. Apply the typography classes correctly (e.g., font-sans for Outfit, font-serif/body for IBM Plex).",
+    "Integrate the brand colors provided to give the application a distinct 'Rum Distillery' personality while maintaining scientific rigor."
+  ],
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "Avoid generic 'AI slop' aesthetics (centered generic layouts, simplistic gradients).",
+    "Create depth through layered design elements and crisp 1px borders.",
+    "Do NOT apply universal transition (transition: all). Use specific transitions.",
+    "Do NOT center align the app container (.App { text-align: center; }).",
+    "Include 'data-testid' on all buttons, links, and key elements for testing.",
+    "Use Lucide icons, do not use emoji characters for icons."
+  ]
+}
